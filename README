@@ -1,0 +1,30 @@
+C Library Gatherer (clg) - CLI utility to manage external dependencies for C(++) projects
+
+It aims to work like CMake in terms of utility, but simpler in terms of complexity.
+
+Usage:
+1. Create `vendor.clg` in root of your project.
+2. Describe what libraries to gather and how.
+3. run `clg`.
+
+Example `vendor.clg` file:
+```
+["raylib"]
+source = "https://github.com/raysan5/raylib.git"
+commit = "62d8969a56909a4721114860cbe1350b5dcb20eb"
+
+#preparation:
+    git clone $source
+    cd raylib
+    git checkout $commit
+
+#build:
+    cd raylib
+    cmake -B build -DCMAKE_BUILD_TYPE=Release
+    cmake --build build --config Release
+
+#post_build:
+    mv raylib/build/raylib/libraylib.a .
+
+%end
+```
