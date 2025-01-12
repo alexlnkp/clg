@@ -57,6 +57,11 @@ impl<'a> Lexer<'a> {
                 }
             }
 
+            if line.trim().starts_with("/*") && line.ends_with("*/") {
+                self.current_line += 1;
+                return Token::Comment(line.trim()[2..].to_string());
+            }
+
             if line.starts_with('[') && line.ends_with(']') {
                 let lib_name = line[1..line.len() - 1].to_string();
                 self.current_line += 1;
@@ -85,7 +90,7 @@ impl<'a> Lexer<'a> {
         while self.current_line < self.lines.len() {
             let line = self.lines[self.current_line].trim();
 
-            if line.is_empty() {
+            if line.is_empty() || (line.trim().starts_with("/*") && line.trim().ends_with("*/")) {
                 self.current_line += 1;
                 continue;
             }
