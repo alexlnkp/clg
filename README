@@ -26,6 +26,8 @@ commit = "62d8969a56909a4721114860cbe1350b5dcb20eb"
 #post_build:
     mv raylib/build/raylib/libraylib.a .
 
+/* this is a comment */
+
 ["crawler"]
 source = "https://github.com/alexlnkp/bsky-quotecrawler.git"
 commit = "b55d3b139c58388edf05576317cb4f095d57374d"
