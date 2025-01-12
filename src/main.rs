@@ -21,6 +21,7 @@ mod lex;
 struct Library {
     source: String,
     commit: String,
+    variables: HashMap<String, String>,
     preparation: Option<Vec<String>>,
     build: Option<Vec<String>>,
     post_build: Option<Vec<String>>,
@@ -62,6 +63,7 @@ fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
                 current_library = Some(Library {
                     source: String::new(),
                     commit: String::new(),
+                    variables: HashMap::new(),
                     preparation: None,
                     build: None,
                     post_build: None,
@@ -72,16 +74,22 @@ fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
                     match key.as_str() {
                         "source" => lib.source = value,
                         "commit" => lib.commit = value,
-                        _ => {}
+                        _ => {
+                            lib.variables.insert(key, value);
+                        }
                     }
                 }
             }
             Token::Step(step_type) => {
                 if let Some(ref mut lib) = current_library {
                     let mut commands = Vec::new();
-                    // collect commands until hit a new step or end of config
+                    // Collect commands until we hit a new step or end of config
                     while let Some(command) = lexer.next_command() {
-                        commands.push(command);
+                        // Replace placeholders in the command
+                        let processed_command = replace_placeholders(&command, &lib.variables)
+                            .replace("$source", lib.source.as_str())
+                            .replace("$commit", lib.commit.as_str());
+                        commands.push(processed_command);
                     }
                     match step_type {
                         StepType::Preparation => lib.preparation = Some(commands),
@@ -112,6 +120,14 @@ fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
     }
 
     Ok(Config { libraries })
+}
+
+fn replace_placeholders(command: &str, variables: &HashMap<String, String>) -> String {
+    let mut result = command.to_string();
+    for (key, value) in variables {
+        result = result.replace(&format!("${}", key), value);
+    }
+    result
 }
 
 fn run_command(command: &str) -> Output {
@@ -206,7 +222,7 @@ fn collect_output(buffer: &Arc<Mutex<Vec<String>>>) -> Vec<u8> {
     buffer.lock().unwrap().join("\n").into_bytes()
 }
 
-fn run_step(step: &Option<Vec<String>>, source: &String, commit: &String) {
+fn run_step(step: &Option<Vec<String>>) {
     if let Some(commands) = step {
         let cmd = commands
             .iter()
@@ -214,23 +230,8 @@ fn run_step(step: &Option<Vec<String>>, source: &String, commit: &String) {
             .map(|comm| format!("{}; ", comm))
             .collect::<String>();
 
-        let cmt = cmd
-            .replace("$source", &**source)
-            .replace("$commit", &**commit);
-
-        let _ = run_command(&cmt);
+        let _ = run_command(&cmd);
     }
-}
-
-fn prepare_library(lib: &Library) {
-    info!("Running preparation step");
-    run_step(&lib.preparation, &lib.source, &lib.commit);
-
-    info!("Running build step");
-    run_step(&lib.build, &lib.source, &lib.commit);
-
-    info!("Running post-build step");
-    run_step(&lib.post_build, &lib.source, &lib.commit);
 }
 
 fn main() {
@@ -253,7 +254,14 @@ fn main() {
             run_command(pre_cd.as_str());
 
             for (_lib_name, library) in &config.libraries {
-                prepare_library(library);
+                info!("Running preparation step");
+                run_step(&library.preparation);
+
+                info!("Running build step");
+                run_step(&library.build);
+
+                info!("Running post-build step");
+                run_step(&library.post_build);
             }
         }
         Err(err) => {
