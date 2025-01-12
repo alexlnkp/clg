@@ -1,5 +1,6 @@
 use std::io::BufRead;
 use std::io::BufReader;
+use std::process::ExitStatus;
 use std::process::{Command, Output, Stdio};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -39,32 +40,58 @@ macro_rules! leech_output {
 pub fn run_command(command: &str) -> Output {
     info!("Running: `{}`", command);
 
-    let mut process = spawn_process(command).expect("failed to execute process");
+    let child_process = spawn_process(command);
+    match child_process {
+        Ok(mut process) => {
+            let (stdout_buffer, stderr_buffer) = (
+                Arc::new(Mutex::new(Vec::new())),
+                Arc::new(Mutex::new(Vec::new())),
+            );
 
-    let (stdout_buffer, stderr_buffer) = (
-        Arc::new(Mutex::new(Vec::new())),
-        Arc::new(Mutex::new(Vec::new())),
-    );
+            let (stdout_handle, stderr_handle) = spawn_output_threads(
+                process.stdout.take(),
+                process.stderr.take(),
+                &stdout_buffer,
+                &stderr_buffer,
+            );
 
-    let (stdout_handle, stderr_handle) = spawn_output_threads(
-        process.stdout.take(),
-        process.stderr.take(),
-        &stdout_buffer,
-        &stderr_buffer,
-    );
+            let status = match process.wait() {
+                Ok(status) => status,
+                Err(e) => {
+                    error!("Failed to wait for process: {}", e);
+                    ExitStatus::default()
+                }
+            };
 
-    let status = process.wait().expect("Command wasn't running");
+            let _ = stdout_handle.join().map_err(|e| {
+                error!("Failed to join stdout thread: {:?}", e);
+            });
+            let _ = stderr_handle.join().map_err(|e| {
+                error!("Failed to join stderr thread: {:?}", e);
+            });
 
-    stdout_handle.join().expect("Failed to join stdout thread");
-    stderr_handle.join().expect("Failed to join stderr thread");
+            let stdout = collect_output(&stdout_buffer);
+            let stderr = collect_output(&stderr_buffer);
 
-    let stdout = collect_output(&stdout_buffer);
-    let stderr = collect_output(&stderr_buffer);
+            Output {
+                status,
+                stdout,
+                stderr,
+            }
+        }
+        Err(e) => {
+            error!("Couldn't spawn child process! {}", e);
 
-    Output {
-        status,
-        stdout,
-        stderr,
+            let status = ExitStatus::default();
+            let stdout = Vec::new();
+            let stderr = Vec::new();
+
+            Output {
+                status,
+                stdout,
+                stderr,
+            }
+        }
     }
 }
 
