@@ -63,6 +63,7 @@ fn main() {
             run_command(pre_cd.as_str());
 
             for (_lib_name, library) in &config.libraries {
+                info!("Library: {_lib_name}");
                 info!("Running preparation step");
                 run_step(&library.preparation);
 

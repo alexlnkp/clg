@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fs, path::Path};
 
+use log::error;
+
 use crate::{
     lex::{Lexer, StepType, Token},
     Library,
@@ -10,24 +12,37 @@ pub struct Config {
     pub libraries: HashMap<String, Library>,
 }
 
+macro_rules! insert_library {
+    ($libraries:ident, $current_library:ident, $current_lib_name:ident) => {
+        if let Some(lib) = $current_library.take() {
+            match $current_lib_name.take() {
+                None => {
+                    error!("Library name empty!");
+                }
+                Some(name) => {
+                    $libraries.insert(name, lib);
+                }
+            }
+        }
+    };
+}
+
 pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
     let content = fs::read_to_string(path)?;
     let lines: Vec<&str> = content.lines().collect();
     let mut lexer = Lexer::new(&lines);
     let mut libraries = HashMap::new();
-    let mut current_lib: Option<String> = None;
+    let mut current_lib_name: Option<String> = None;
     let mut current_library: Option<Library> = None;
 
     loop {
         match lexer.next_token() {
             Token::LibraryName(lib_name) => {
                 // save previous library if it exists
-                if let Some(lib) = current_library.take() {
-                    libraries.insert(current_lib.take().unwrap(), lib);
-                }
+                insert_library!(libraries, current_library, current_lib_name);
 
                 // start new library
-                current_lib = Some(lib_name);
+                current_lib_name = Some(lib_name);
                 current_library = Some(Library {
                     source: String::new(),
                     commit: String::new(),
@@ -68,9 +83,7 @@ pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
             }
             Token::EndOfConfig => {
                 // save last library if it exists
-                if let Some(lib) = current_library.take() {
-                    libraries.insert(current_lib.take().unwrap(), lib);
-                }
+                insert_library!(libraries, current_library, current_lib_name);
                 break;
             }
             Token::EndOfFile => {
@@ -81,7 +94,7 @@ pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
     }
 
     // finalize last library if it exists
-    if let Some(lib_name) = current_lib {
+    if let Some(lib_name) = current_lib_name {
         if let Some(lib) = current_library {
             libraries.insert(lib_name, lib);
         }

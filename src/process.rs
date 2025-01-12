@@ -5,7 +5,36 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
+use log::error;
 use log::{info, warn};
+
+// Leech output from stdout/stderr while also storing the resulting output
+macro_rules! leech_output {
+    ($out:ident, $out_buf:ident, $log_method:ident) => {
+        thread::spawn({
+            let output_buffer_clone = Arc::clone($out_buf);
+            move || {
+                if let Some(output) = $out {
+                    let reader = BufReader::new(output);
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            $log_method!("{}", line);
+                            match output_buffer_clone.lock() {
+                                Err(e) => {
+                                    error!("Failed to lock {} buffer! {}", stringify!($out), e);
+                                    return;
+                                }
+                                Ok(mut vec) => {
+                                    vec.push(line);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    };
+}
 
 pub fn run_command(command: &str) -> Output {
     info!("Running: `{}`", command);
@@ -62,39 +91,19 @@ pub fn spawn_output_threads(
     stdout_buffer: &Arc<Mutex<Vec<String>>>,
     stderr_buffer: &Arc<Mutex<Vec<String>>>,
 ) -> (thread::JoinHandle<()>, thread::JoinHandle<()>) {
-    let stdout_handle = thread::spawn({
-        let stdout_buffer_clone = Arc::clone(stdout_buffer);
-        move || {
-            if let Some(stdout) = stdout {
-                let reader = BufReader::new(stdout);
-                for line in reader.lines() {
-                    if let Ok(line) = line {
-                        info!("{}", line);
-                        stdout_buffer_clone.lock().unwrap().push(line);
-                    }
-                }
-            }
-        }
-    });
-
-    let stderr_handle = thread::spawn({
-        let stderr_buffer_clone = Arc::clone(stderr_buffer);
-        move || {
-            if let Some(stderr) = stderr {
-                let reader = BufReader::new(stderr);
-                for line in reader.lines() {
-                    if let Ok(line) = line {
-                        warn!("{}", line);
-                        stderr_buffer_clone.lock().unwrap().push(line);
-                    }
-                }
-            }
-        }
-    });
+    let stdout_handle = leech_output!(stdout, stdout_buffer, info);
+    let stderr_handle = leech_output!(stderr, stderr_buffer, warn);
 
     (stdout_handle, stderr_handle)
 }
 
 pub fn collect_output(buffer: &Arc<Mutex<Vec<String>>>) -> Vec<u8> {
-    buffer.lock().unwrap().join("\n").into_bytes()
+    match buffer.lock() {
+        Ok(buffer) => buffer.join("\n").into_bytes(),
+        Err(err) => {
+            error!("Couldn't lock buffer! {}", err);
+            // Need to return SOMETHING here.
+            Vec::new()
+        }
+    }
 }
