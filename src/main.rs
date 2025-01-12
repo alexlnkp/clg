@@ -1,5 +1,8 @@
 use clap::Parser;
-use log::{warn, info};
+use lex::Lexer;
+use lex::StepType;
+use lex::Token;
+use log::{info, warn};
 use std::collections::HashMap;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -9,7 +12,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::{env, fs, thread};
 
+mod lex;
+
 // C(++) library gatherer
+// Pardon the messy code, this is like my 2nd rust project
 
 #[derive(Debug)]
 struct Library {
@@ -35,96 +41,70 @@ struct Config {
     libraries: HashMap<String, Library>,
 }
 
-macro_rules! get_commands {
-    ($lib:expr, $lines:expr, $i:expr, $pool:ident) => {
-        $i += 1;
-        let commands = parse_commands(&$lines, &mut $i);
-        $lib.$pool = Some(commands);
-        continue;
-    };
-}
-
-fn parse_commands(lines: &[&str], i: &mut usize) -> Vec<String> {
-    let mut commands = Vec::new();
-    while *i < lines.len() {
-        let line = lines[*i];
-        let trimmed_line = line.trim();
-
-        if trimmed_line.starts_with('#') {
-            break;
-        }
-        if line.starts_with(' ') || line.starts_with('\t') {
-            commands.push(trimmed_line.to_string());
-        } else {
-            break;
-        }
-        *i += 1;
-    }
-
-    commands
-}
-
 fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
     let content = fs::read_to_string(path)?;
+    let lines: Vec<&str> = content.lines().collect();
+    let mut lexer = Lexer::new(&lines);
     let mut libraries = HashMap::new();
     let mut current_lib: Option<String> = None;
     let mut current_library: Option<Library> = None;
 
-    let lines: Vec<&str> = content.lines().collect();
-
-    let mut i = 0;
-
-    while i < lines.len() {
-        let line = lines[i].trim();
-
-        if line.starts_with('[') && line.ends_with(']') {
-            if let Some(lib_name) = current_lib.take() {
+    loop {
+        match lexer.next_token() {
+            Token::LibraryName(lib_name) => {
+                // save previous library if it exists
                 if let Some(lib) = current_library.take() {
-                    libraries.insert(lib_name, lib);
+                    libraries.insert(current_lib.take().unwrap(), lib);
+                }
+
+                // start new library
+                current_lib = Some(lib_name);
+                current_library = Some(Library {
+                    source: String::new(),
+                    commit: String::new(),
+                    preparation: None,
+                    build: None,
+                    post_build: None,
+                });
+            }
+            Token::KeyValue(key, value) => {
+                if let Some(ref mut lib) = current_library {
+                    match key.as_str() {
+                        "source" => lib.source = value,
+                        "commit" => lib.commit = value,
+                        _ => {}
+                    }
                 }
             }
-
-            current_lib = Some(line[1..line.len() - 1].to_string());
-            current_library = Some(Library {
-                source: String::new(),
-                commit: String::new(),
-                preparation: None,
-                build: None,
-                post_build: None,
-            });
-        } else if let Some(ref mut lib) = current_library {
-            if line.starts_with("source") {
-                lib.source = line
-                    .split('=')
-                    .nth(1)
-                    .unwrap()
-                    .trim()
-                    .trim_matches('"')
-                    .to_string();
-            } else if line.starts_with("commit") {
-                lib.commit = line
-                    .split('=')
-                    .nth(1)
-                    .unwrap()
-                    .trim()
-                    .trim_matches('"')
-                    .to_string();
-            } else if line.starts_with("#preparation:") {
-                get_commands!(lib, lines, i, preparation);
-            } else if line.starts_with("#build:") {
-                get_commands!(lib, lines, i, build);
-            } else if line.starts_with("#post_build:") {
-                get_commands!(lib, lines, i, post_build);
+            Token::Step(step_type) => {
+                if let Some(ref mut lib) = current_library {
+                    let mut commands = Vec::new();
+                    // collect commands until hit a new step or end of config
+                    while let Some(command) = lexer.next_command() {
+                        commands.push(command);
+                    }
+                    match step_type {
+                        StepType::Preparation => lib.preparation = Some(commands),
+                        StepType::Build => lib.build = Some(commands),
+                        StepType::PostBuild => lib.post_build = Some(commands),
+                    }
+                }
             }
+            Token::EndOfConfig => {
+                // save last library if it exists
+                if let Some(lib) = current_library.take() {
+                    libraries.insert(current_lib.take().unwrap(), lib);
+                }
+                break;
+            }
+            Token::EndOfFile => {
+                break;
+            }
+            _ => {}
         }
-
-        if line.starts_with("%end") {
-            break;
-        }
-
-        i += 1;
     }
 
+    // finalize last library if it exists
     if let Some(lib_name) = current_lib {
         if let Some(lib) = current_library {
             libraries.insert(lib_name, lib);
