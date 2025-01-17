@@ -1,4 +1,5 @@
-use std::{collections::HashMap, fs, path::Path};
+use std::fs;
+use std::path::Path;
 
 use indexmap::IndexMap;
 use log::error;
@@ -10,7 +11,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Config {
-    pub libraries: HashMap<String, Library>,
+    pub libraries: IndexMap<String, Library>,
 }
 
 macro_rules! insert_library {
@@ -32,7 +33,7 @@ pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
     let content = fs::read_to_string(path)?;
     let lines: Vec<&str> = content.lines().collect();
     let mut lexer = Lexer::new(&lines);
-    let mut libraries = HashMap::new();
+    let mut libraries = IndexMap::new();
     let mut current_lib_name: Option<String> = None;
     let mut current_library: Option<Library> = None;
 
@@ -83,7 +84,6 @@ pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
             Token::EndOfFile => {
                 break;
             }
-            _ => {}
         }
     }
 
