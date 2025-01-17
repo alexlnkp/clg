@@ -1,8 +1,8 @@
 use crate::process::run_command;
 use clap::Parser;
-use log::info;
+use indexmap::IndexMap;
+use log::{info, warn};
 use parser::read_config;
-use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 
@@ -17,10 +17,8 @@ mod process;
 struct Library {
     source: String,
     commit: String,
-    variables: HashMap<String, String>,
-    preparation: Option<Vec<String>>,
-    build: Option<Vec<String>>,
-    post_build: Option<Vec<String>>,
+    variables: IndexMap<String, String>,
+    steps: IndexMap<String, Option<Vec<String>>>,
 }
 
 #[derive(Parser, Debug)]
@@ -33,15 +31,20 @@ struct Args {
     working_path: String, // CD here before doing anything (WIP)
 }
 
-fn run_step(step: &Option<Vec<String>>) {
-    if let Some(commands) = step {
-        let cmd = commands
-            .iter()
-            .filter(|comm| !comm.is_empty())
-            .map(|comm| format!("{}; ", comm))
-            .collect::<String>();
+fn run_steps(steps: &IndexMap<String, Option<Vec<String>>>) {
+    for step in steps {
+        info!("Running \"{}\" step", step.0);
+        if let Some(commands) = step.1 {
+            let cmd = commands
+                .iter()
+                .filter(|comm| !comm.is_empty())
+                .map(|comm| format!("{}; ", comm))
+                .collect::<String>();
 
-        let _ = run_command(&cmd);
+            let _ = run_command(&cmd);
+        } else {
+            warn!("No commands defined for step \"{}\"!", step.0);
+        }
     }
 }
 
@@ -64,14 +67,7 @@ fn main() {
 
             for (_lib_name, library) in &config.libraries {
                 info!("Library: {_lib_name}");
-                info!("Running preparation step");
-                run_step(&library.preparation);
-
-                info!("Running build step");
-                run_step(&library.build);
-
-                info!("Running post-build step");
-                run_step(&library.post_build);
+                run_steps(&library.steps);
             }
         }
         Err(err) => {

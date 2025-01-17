@@ -1,21 +1,13 @@
-use log::warn;
+use log::error;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
     LibraryName(String),
     KeyValue(String, String),
-    // Command(String), // we grab commands straight from steps, no need to have lex type for them?
     Comment(String),
-    Step(StepType),
+    Step(String),
     EndOfFile,
     EndOfConfig,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum StepType {
-    Preparation,
-    Build,
-    PostBuild,
 }
 
 pub struct Lexer<'a> {
@@ -41,19 +33,23 @@ impl<'a> Lexer<'a> {
             }
 
             if line.starts_with('#') {
-                if line.starts_with("#preparation:") {
+                if line.ends_with(':') {
+                    let step_name = line.strip_prefix('#').and_then(|s| s.strip_suffix(':'));
+
                     self.current_line += 1;
-                    return Token::Step(StepType::Preparation);
-                } else if line.starts_with("#build:") {
-                    self.current_line += 1;
-                    return Token::Step(StepType::Build);
-                } else if line.starts_with("#post_build:") {
-                    self.current_line += 1;
-                    return Token::Step(StepType::PostBuild);
-                } else {
-                    warn!("Unknown step \"{line}\"! expected one of {{preparation, build, post_build}}!");
-                    self.current_line += 1; // ?
-                    return Token::Comment(line[1..].trim().to_string());
+                    match step_name {
+                        // step_name could be an empty string, and we don't want that, so if
+                        // step_name IS an empty string - we should treat it as a None.
+                        Some(name) if !name.is_empty() => {
+                            return Token::Step(name.to_string());
+                        }
+                        _ => {
+                            error!("Couldn't parse step name on line {}!", self.current_line);
+                            error!("Causing issues: `{}'", self.lines[self.current_line - 1]);
+                            error!("Did you forget to give the step a name?");
+                            panic!(); // panicking might be overkill
+                        }
+                    };
                 }
             }
 

@@ -1,9 +1,10 @@
 use std::{collections::HashMap, fs, path::Path};
 
+use indexmap::IndexMap;
 use log::error;
 
 use crate::{
-    lex::{Lexer, StepType, Token},
+    lex::{Lexer, Token},
     Library,
 };
 
@@ -46,10 +47,8 @@ pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
                 current_library = Some(Library {
                     source: String::new(),
                     commit: String::new(),
-                    variables: HashMap::new(),
-                    preparation: None,
-                    build: None,
-                    post_build: None,
+                    variables: IndexMap::new(),
+                    steps: IndexMap::new(),
                 });
             }
             Token::KeyValue(key, value) => {
@@ -63,22 +62,17 @@ pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
                     }
                 }
             }
-            Token::Step(step_type) => {
+            Token::Step(step_name) => {
                 if let Some(ref mut lib) = current_library {
                     let mut commands = Vec::new();
-                    // Collect commands until we hit a new step or end of config
                     while let Some(command) = lexer.next_command() {
-                        // Replace placeholders in the command
                         let processed_command = replace_placeholders(&command, &lib.variables)
                             .replace("$source", lib.source.as_str())
                             .replace("$commit", lib.commit.as_str());
                         commands.push(processed_command);
                     }
-                    match step_type {
-                        StepType::Preparation => lib.preparation = Some(commands),
-                        StepType::Build => lib.build = Some(commands),
-                        StepType::PostBuild => lib.post_build = Some(commands),
-                    }
+
+                    lib.steps.insert(step_name, Some(commands));
                 }
             }
             Token::EndOfConfig => {
@@ -103,7 +97,7 @@ pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
     Ok(Config { libraries })
 }
 
-fn replace_placeholders(command: &str, variables: &HashMap<String, String>) -> String {
+fn replace_placeholders(command: &str, variables: &IndexMap<String, String>) -> String {
     let mut result = command.to_string();
     for (key, value) in variables {
         result = result.replace(&format!("${}", key), value);
