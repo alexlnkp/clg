@@ -4,7 +4,6 @@ use log::error;
 pub enum Token {
     LibraryName(String),
     KeyValue(String, String),
-    Comment(String),
     Step(String),
     EndOfFile,
     EndOfConfig,
@@ -53,9 +52,9 @@ impl<'a> Lexer<'a> {
                 }
             }
 
-            if line.trim().starts_with("/*") && line.ends_with("*/") {
+            if line.starts_with("/*") && line.ends_with("*/") {
                 self.current_line += 1;
-                return Token::Comment(line.trim()[2..].to_string());
+                continue;
             }
 
             if line.starts_with('[') && line.ends_with(']') {
@@ -86,7 +85,7 @@ impl<'a> Lexer<'a> {
         while self.current_line < self.lines.len() {
             let line = self.lines[self.current_line].trim();
 
-            if line.is_empty() || (line.trim().starts_with("/*") && line.trim().ends_with("*/")) {
+            if line.is_empty() || (line.starts_with("/*") && line.ends_with("*/")) {
                 self.current_line += 1;
                 continue;
             }
