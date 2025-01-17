@@ -14,21 +14,6 @@ pub struct Config {
     pub libraries: IndexMap<String, Library>,
 }
 
-macro_rules! insert_library {
-    ($libraries:ident, $current_library:ident, $current_lib_name:ident) => {
-        if let Some(lib) = $current_library.take() {
-            match $current_lib_name.take() {
-                None => {
-                    error!("Library name empty!");
-                }
-                Some(name) => {
-                    $libraries.insert(name, lib);
-                }
-            }
-        }
-    };
-}
-
 pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
     let content = fs::read_to_string(path)?;
     let lines: Vec<&str> = content.lines().collect();
@@ -41,7 +26,16 @@ pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
         match lexer.next_token() {
             Token::LibraryName(lib_name) => {
                 // save previous library if it exists
-                insert_library!(libraries, current_library, current_lib_name);
+                if let Some(lib) = current_library.take() {
+                    match current_lib_name.take() {
+                        None => {
+                            error!("Library name empty!");
+                        }
+                        Some(name) => {
+                            libraries.insert(name, lib);
+                        }
+                    }
+                };
 
                 // start new library
                 current_lib_name = Some(lib_name);
@@ -76,14 +70,8 @@ pub fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
                     lib.steps.insert(step_name, Some(commands));
                 }
             }
-            Token::EndOfConfig => {
-                // save last library if it exists
-                insert_library!(libraries, current_library, current_lib_name);
-                break;
-            }
-            Token::EndOfFile => {
-                break;
-            }
+            Token::EndOfConfig => break,
+            Token::EndOfFile => break,
         }
     }
 
