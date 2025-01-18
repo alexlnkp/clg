@@ -1,4 +1,4 @@
-use crate::process::run_command;
+use ishell::IShell;
 use clap::Parser;
 use indexmap::IndexMap;
 use log::{info, warn};
@@ -8,7 +8,6 @@ use std::path::Path;
 
 mod lex;
 mod parser;
-mod process;
 
 // C(++) library gatherer
 // Pardon the messy code, this is like my 2nd rust project
@@ -31,17 +30,15 @@ struct Args {
     working_path: String, // CD here before doing anything (WIP)
 }
 
-fn run_steps(steps: &IndexMap<String, Option<Vec<String>>>) {
+fn run_steps(steps: &IndexMap<String, Option<Vec<String>>>, run_dir: &Path) {
     for step in steps {
         info!("Running \"{}\" step", step.0);
         if let Some(commands) = step.1 {
-            let cmd = commands
-                .iter()
-                .filter(|comm| !comm.is_empty())
-                .map(|comm| format!("{}; ", comm))
-                .collect::<String>();
+            let shell = IShell::new(run_dir.to_str().map(|s| s.to_string()));
+            for command in commands {
+                let _ = shell.run_command(command);
+            }
 
-            let _ = run_command(&cmd);
         } else {
             warn!("No commands defined for step \"{}\"!", step.0);
         }
@@ -58,16 +55,13 @@ fn main() {
     let args = Args::parse();
     let project_path_str = format!("{}/vendor.clg", args.path.as_str());
     let project_path = Path::new(&project_path_str);
+    let run_path = Path::new(&args.working_path);
 
     match read_config(project_path) {
         Ok(config) => {
-            // issue is that we need to keep track of the dir we're in
-            let pre_cd = format!("cd {}", args.working_path);
-            run_command(pre_cd.as_str());
-
             for (_lib_name, library) in &config.libraries {
                 info!("Library: {_lib_name}");
-                run_steps(&library.steps);
+                run_steps(&library.steps, &run_path);
             }
         }
         Err(err) => {
