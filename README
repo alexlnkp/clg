@@ -19,9 +19,9 @@ commit = "62d8969a56909a4721114860cbe1350b5dcb20eb"
     git checkout $commit
 
 #build:
-    cd raylib
     cmake -B build -DCMAKE_BUILD_TYPE=Release
     cmake --build build --config Release
+    cd ..
 
 #post_build:
     mv raylib/build/raylib/libraylib.a .
@@ -34,16 +34,16 @@ commit = "b55d3b139c58388edf05576317cb4f095d57374d"
 
 user_def_var = 21
 
-#preparation:
+#prep:
     git clone $source
     cd bsky-quotecrawler
     git checkout $commit
 
-#build:
+#building:
     echo $user_def_var
     echo "pretend we're building here"
 
-#post_build:
+#after-build:
     echo "postbuild"
 
 %end
