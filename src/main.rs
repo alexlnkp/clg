@@ -1,6 +1,6 @@
-use ishell::IShell;
 use clap::Parser;
 use indexmap::IndexMap;
+use ishell::IShell;
 use log::{info, warn};
 use parser::read_config;
 use std::env;
@@ -34,11 +34,10 @@ fn run_steps(steps: &IndexMap<String, Option<Vec<String>>>, run_dir: &Path) {
     for step in steps {
         info!("Running \"{}\" step", step.0);
         if let Some(commands) = step.1 {
-            let shell = IShell::new(run_dir.to_str().map(|s| s.to_string()));
+            let shell = IShell::new(run_dir.to_str());
             for command in commands {
                 let _ = shell.run_command(command);
             }
-
         } else {
             warn!("No commands defined for step \"{}\"!", step.0);
         }
