@@ -29,8 +29,13 @@ struct Args {
     #[arg(short, long, default_value_t = String::from(""), help = "CD here before running any command")]
     working_path: String, // CD here before doing anything (WIP)
 
-    #[arg(short, long, default_value_t = true, help = "Continues gathering current library, even if any of its commands fail")]
-    continue_on_fail: bool
+    #[arg(
+        short,
+        long,
+        default_value_t = true,
+        help = "Continues gathering current library, even if any of its commands fail"
+    )]
+    continue_on_fail: bool,
 }
 
 fn gather_library(library: &Library, shell: IShell, continue_on_fail: bool) {
