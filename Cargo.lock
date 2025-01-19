@@ -182,7 +182,9 @@ checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
 
 [[package]]
 name = "ishell"
-version = "0.1.5"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80a2e6c83c67a1da0425e7ce9303faaaf612e62449f3a1ac232bb449a17e3aa2"
 dependencies = [
  "log",
 ]
