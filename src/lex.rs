@@ -31,25 +31,23 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
-            if line.starts_with('#') {
-                if line.ends_with(':') {
-                    let step_name = line.strip_prefix('#').and_then(|s| s.strip_suffix(':'));
+            if line.starts_with('#') && line.ends_with(':') {
+                let step_name = line.strip_prefix('#').and_then(|s| s.strip_suffix(':'));
 
-                    self.current_line += 1;
-                    match step_name {
-                        // step_name could be an empty string, and we don't want that, so if
-                        // step_name IS an empty string - we should treat it as a None.
-                        Some(name) if !name.is_empty() => {
-                            return Token::Step(name.to_string());
-                        }
-                        _ => {
-                            error!("Couldn't parse step name on line {}!", self.current_line);
-                            error!("Causing issues: `{}'", self.lines[self.current_line - 1]);
-                            error!("Did you forget to give the step a name?");
-                            panic!(); // panicking might be overkill
-                        }
-                    };
-                }
+                self.current_line += 1;
+                match step_name {
+                    // step_name could be an empty string, and we don't want that, so if
+                    // step_name IS an empty string - we should treat it as a None.
+                    Some(name) if !name.is_empty() => {
+                        return Token::Step(name.to_string());
+                    }
+                    _ => {
+                        error!("Couldn't parse step name on line {}!", self.current_line);
+                        error!("Causing issues: `{}'", self.lines[self.current_line - 1]);
+                        error!("Did you forget to give the step a name?");
+                        panic!(); // panicking might be overkill
+                    }
+                };
             }
 
             if line.starts_with("/*") && line.ends_with("*/") {

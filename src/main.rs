@@ -80,7 +80,7 @@ fn main() {
             for (_lib_name, library) in &config.libraries {
                 info!("Library: {_lib_name}");
                 let shell = IShell::new(run_path.to_str());
-                gather_library(&library, shell, args.continue_on_fail);
+                gather_library(library, shell, args.continue_on_fail);
             }
         }
         Err(err) => {
